@@ -1,0 +1,43 @@
+{
+  "name": "fintech",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "accounts": "hardhat accounts",
+    "compile": "hardhat compile",
+    "deploy:hardhat": "hardhat deploy --network hardhat",
+    "deploy:rinkeby": "hardhat deploy --network rinkeby",
+    "test": "hardhat test"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@nomiclabs/hardhat-ethers": "2.0.2",
+    "@nomiclabs/hardhat-etherscan": "2.1.2",
+    "@nomiclabs/hardhat-truffle5": "2.0.0",
+    "@nomiclabs/hardhat-waffle": "2.0.1",
+    "@nomiclabs/hardhat-web3": "2.0.0",
+    "chai": "4.3.4",
+    "dotenv": "10.0.0",
+    "ethereum-waffle": "3.3.0",
+    "ethers": "5.2.0",
+    "hardhat": "2.7.0",
+    "hardhat-deploy": "0.9.3"
+  },
+  "dependencies": {
+    "@openzeppelin/contracts": "^4.3.2",
+    "@openzeppelin/contracts-upgradeable": "^4.4.2",
+    "@setprotocol/index-coop-contracts": "^0.0.26",
+    "@typechain/hardhat": "^2.3.0",
+    "chai-as-promised": "^7.1.1",
+    "chai-bn": "^0.3.0",
+    "eth-saddle": "^0.1.25",
+    "hardhat-typechain": "^0.3.5",
+    "jest-diff": "^27.3.1",
+    "jest-junit": "^13.0.0",
+    "solidity-coverage": "^0.7.16",
+    "typechain": "^5.1.2"
+  }
+}
