@@ -25,6 +25,8 @@ contract CHNStaking is OwnableUpgradeable {
         uint256 totalAmountStake;
     }
 
+    event Add(address indexed stakToken, uint256 indexed allocPoint);
+    event Set(uint256 indexed pid, uint256 indexed allocPoint);
     event Stake(address indexed user, uint256 indexed pid, uint256 amount);
     event Withdraw(address indexed user, uint256 indexed pid, uint256 amount, uint256 reward);
     event EmergencyWithdraw(
@@ -32,16 +34,23 @@ contract CHNStaking is OwnableUpgradeable {
         uint256 indexed pid,
         uint256 amount
     );
+    event ClaimRewardFromVault(address indexed userAddress, uint256 indexed pid);
 
     IERC20 public rewardToken;
     uint256 public rewardPerBlock;
     PoolInfo[] public poolInfo;
     mapping(uint256 => mapping(address => UserInfo)) public userInfo;
+    mapping(address => bool) public poolTokens;
     uint256 public totalAllocPoint = 0;
     uint256 public startBlock;
     uint256 public bonusEndBlock;
     uint256 public BONUS_MULTIPLIER;
     address public rewardVault;
+
+    modifier validatePoolByPid(uint256 _pid) {
+        require(_pid < poolInfo.length, "Pool does not exist");
+        _;
+    }
 
     function initialize(
         IERC20 _rewardToken,
@@ -51,6 +60,9 @@ contract CHNStaking is OwnableUpgradeable {
         uint256 _multiplier,
         address _rewardVault
     ) public initializer {
+        require(_rewardVault != address(0) && address(_rewardToken) != address(0), "Zero address validation");
+        require(_startBlock < _bonusEndBlock, "Start block lower than bonus end block");
+        require(_rewardPerBlock < _rewardToken.totalSupply(), "Reward per block less than token total supply");
         __Ownable_init();
         rewardToken = _rewardToken;
         rewardPerBlock = _rewardPerBlock;
@@ -69,19 +81,19 @@ contract CHNStaking is OwnableUpgradeable {
         return info.amount;
     }
 
-    // Add a new stake to the pool. Can only be called by the owner.
+    // Add a new stake to the pool. Can only be called by the Timelock and DAO.
     // XXX DO NOT add the same stake token more than once. Rewards will be messed up if you do.
+    // This function can be only called by Timelock and DAO with voting power
     function add(
         uint256 _allocPoint,
-        IERC20 _stakeToken,
-        bool _withUpdate
+        IERC20 _stakeToken
     ) public onlyOwner {
-        if (_withUpdate) {
-            massUpdatePools();
-        }
+        require(!poolTokens[address(_stakeToken)], "Stake token already exist");
+        massUpdatePools();
         uint256 lastRewardBlock =
             block.number > startBlock ? block.number : startBlock;
         totalAllocPoint = totalAllocPoint.add(_allocPoint);
+        poolTokens[address(_stakeToken)] = true;
         poolInfo.push(
             PoolInfo({
                 stakeToken: _stakeToken,
@@ -91,21 +103,21 @@ contract CHNStaking is OwnableUpgradeable {
                 totalAmountStake: 0
             })
         );
+        emit Add(address(_stakeToken), _allocPoint);
     }
 
-    // Update the given pool's SUSHI allocation point. Can only be called by the owner.
+    // Update the given pool's SUSHI allocation point. Can only be called by the Timelock and DAO.
+    // This function can be only called by Timelock and DAO with voting power
     function set(
         uint256 _pid,
-        uint256 _allocPoint,
-        bool _withUpdate
-    ) public onlyOwner {
-        if (_withUpdate) {
-            massUpdatePools();
-        }
+        uint256 _allocPoint
+    ) public onlyOwner validatePoolByPid(_pid) {
+        massUpdatePools();
         totalAllocPoint = totalAllocPoint.sub(poolInfo[_pid].allocPoint).add(
             _allocPoint
         );
         poolInfo[_pid].allocPoint = _allocPoint;
+        emit Set(_pid, _allocPoint);
     }
 
     // Return reward multiplier over the given _from to _to block.
@@ -114,6 +126,7 @@ contract CHNStaking is OwnableUpgradeable {
         view
         returns (uint256)
     {
+        require(_from >= startBlock, "from block number bigger than start block");
         if (_to <= bonusEndBlock) {
             return _to.sub(_from).mul(BONUS_MULTIPLIER);
         } else if (_from >= bonusEndBlock) {
@@ -129,6 +142,7 @@ contract CHNStaking is OwnableUpgradeable {
     function pendingReward(uint256 _pid, address _user)
         external
         view
+        validatePoolByPid(_pid)
         returns (uint256)
     {
         PoolInfo storage pool = poolInfo[_pid];
@@ -158,7 +172,7 @@ contract CHNStaking is OwnableUpgradeable {
     }
 
     // Update reward variables of the given pool to be up-to-date.
-    function updatePool(uint256 _pid) public {
+    function updatePool(uint256 _pid) public validatePoolByPid(_pid) {
         PoolInfo storage pool = poolInfo[_pid];
         if (block.number <= pool.lastRewardBlock) {
             return;
@@ -179,7 +193,8 @@ contract CHNStaking is OwnableUpgradeable {
         pool.lastRewardBlock = block.number;
     }
 
-    function stake(uint256 _pid, uint256 _amount) public {
+    // Only support non-deflationary tokens staking
+    function stake(uint256 _pid, uint256 _amount) public validatePoolByPid(_pid) {
         PoolInfo storage pool = poolInfo[_pid];
         UserInfo storage user = userInfo[_pid][msg.sender];
         updatePool(_pid);
@@ -201,7 +216,7 @@ contract CHNStaking is OwnableUpgradeable {
         emit Stake(msg.sender, _pid, _amount);
     }
 
-    function withdraw(uint256 _pid, uint256 _amount) public {
+    function withdraw(uint256 _pid, uint256 _amount) public validatePoolByPid(_pid) {
         PoolInfo storage pool = poolInfo[_pid];
         UserInfo storage user = userInfo[_pid][msg.sender];
         require(user.amount >= _amount, "withdraw: not good");
@@ -221,7 +236,7 @@ contract CHNStaking is OwnableUpgradeable {
     }
 
     // Withdraw without caring about rewards. EMERGENCY ONLY.
-    function emergencyWithdraw(uint256 _pid) public {
+    function emergencyWithdraw(uint256 _pid) public validatePoolByPid(_pid) {
         PoolInfo storage pool = poolInfo[_pid];
         UserInfo storage user = userInfo[_pid][msg.sender];
         uint256 userAmount = user.amount;
@@ -233,7 +248,7 @@ contract CHNStaking is OwnableUpgradeable {
         emit EmergencyWithdraw(msg.sender, _pid, userAmount);
     }
 
-    function claimRewardFromVault(address userAddress, uint256 pid) public returns (uint256) {
+    function claimRewardFromVault(address userAddress, uint256 pid) public validatePoolByPid(pid) returns (uint256) {
         require(msg.sender == rewardVault, "Ownable: only reward vault");
         PoolInfo storage pool = poolInfo[pid];
         UserInfo storage user = userInfo[pid][userAddress];
@@ -245,6 +260,7 @@ contract CHNStaking is OwnableUpgradeable {
         pending = pending + user.pendingTokenReward;
         user.pendingTokenReward = 0;
         user.rewardDebt = user.amount.mul(pool.accCHNPerShare).div(1e12);
+        emit ClaimRewardFromVault(userAddress, pid);
         return pending;
     }
 }
