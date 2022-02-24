@@ -35,7 +35,10 @@ contract CHNStaking is OwnableUpgradeable {
         uint256 amount
     );
     event ClaimRewardFromVault(address indexed userAddress, uint256 indexed pid);
-
+    
+    /// @notice An event thats emitted when a delegate account's vote balance changes
+    event DelegateVotesChanged(address indexed delegate, uint previousBalance, uint newBalance);
+    
     IERC20 public rewardToken;
     uint256 public rewardPerBlock;
     PoolInfo[] public poolInfo;
@@ -46,6 +49,18 @@ contract CHNStaking is OwnableUpgradeable {
     uint256 public bonusEndBlock;
     uint256 public BONUS_MULTIPLIER;
     address public rewardVault;
+
+    /// @notice A checkpoint for marking number of votes from a given block
+    struct Checkpoint {
+        uint32 fromBlock;
+        uint256 votes;
+    }
+
+    /// @notice A record of votes checkpoints for each account, by index
+    mapping (uint256 => mapping (address => mapping (uint32 => Checkpoint))) public checkpoints;
+
+    /// @notice The number of checkpoints for each account
+    mapping (uint256 => mapping (address => uint32)) public numCheckpoints;
 
     modifier validatePoolByPid(uint256 _pid) {
         require(_pid < poolInfo.length, "Pool does not exist");
@@ -193,6 +208,22 @@ contract CHNStaking is OwnableUpgradeable {
         pool.lastRewardBlock = block.number;
     }
 
+    function _moveDelegates(uint256 _pid, address dstRep, uint256 amount, bool stake) internal {
+        if (amount > 0) {
+            if (dstRep != address(0)) {
+                uint32 dstRepNum = numCheckpoints[_pid][dstRep];
+                uint256 dstRepOld = dstRepNum > 0 ? checkpoints[_pid][dstRep][dstRepNum - 1].votes : 0;
+                if (stake) {
+                    uint256 dstRepNew = dstRepOld.add(amount);
+                    _writeCheckpoint(_pid, dstRep, dstRepNum, dstRepOld, dstRepNew);
+                } else {
+                    uint256 dstRepNew = dstRepOld.sub(amount);
+                    _writeCheckpoint(_pid, dstRep, dstRepNum, dstRepOld, dstRepNew);
+                }
+            }
+        }
+    }
+
     // Only support non-deflationary tokens staking
     function stake(uint256 _pid, uint256 _amount) public validatePoolByPid(_pid) {
         PoolInfo storage pool = poolInfo[_pid];
@@ -213,6 +244,8 @@ contract CHNStaking is OwnableUpgradeable {
         );
         user.amount = user.amount.add(_amount);
         user.rewardDebt = user.amount.mul(pool.accCHNPerShare).div(1e12);
+
+        _moveDelegates(_pid, msg.sender, _amount, true);
         emit Stake(msg.sender, _pid, _amount);
     }
 
@@ -232,6 +265,9 @@ contract CHNStaking is OwnableUpgradeable {
         pool.totalAmountStake = pool.totalAmountStake.sub(_amount);
         user.rewardDebt = user.amount.mul(pool.accCHNPerShare).div(1e12);
         pool.stakeToken.safeTransfer(address(msg.sender), _amount);
+
+        // Remove delegates from staking user
+        _moveDelegates(_pid, msg.sender, _amount, false);
         emit Withdraw(msg.sender, _pid, _amount, 0);
     }
 
@@ -262,5 +298,64 @@ contract CHNStaking is OwnableUpgradeable {
         user.rewardDebt = user.amount.mul(pool.accCHNPerShare).div(1e12);
         emit ClaimRewardFromVault(userAddress, pid);
         return pending;
+    }
+
+    /**
+     * @notice Determine the prior number of votes for an account as of a block number
+     * @dev Block number must be a finalized block or else this function will revert to prevent misinformation.
+     * @param account The address of the account to check
+     * @param blockNumber The block number to get the vote balance at
+     * @return The number of votes the account had as of the given block
+     */
+    function getPriorVotes(uint256 _pid, address account, uint blockNumber) public view returns (uint256) {
+        require(blockNumber < block.number, "Comp::getPriorVotes: not yet determined");
+
+        uint32 nCheckpoints = numCheckpoints[_pid][account];
+        if (nCheckpoints == 0) {
+            return 0;
+        }
+
+        // First check most recent balance
+        if (checkpoints[_pid][account][nCheckpoints - 1].fromBlock <= blockNumber) {
+            return checkpoints[_pid][account][nCheckpoints - 1].votes;
+        }
+
+        // Next check implicit zero balance
+        if (checkpoints[_pid][account][0].fromBlock > blockNumber) {
+            return 0;
+        }
+
+        uint32 lower = 0;
+        uint32 upper = nCheckpoints - 1;
+        while (upper > lower) {
+            uint32 center = upper - (upper - lower) / 2; // ceil, avoiding overflow
+            Checkpoint memory cp = checkpoints[_pid][account][center];
+            if (cp.fromBlock == blockNumber) {
+                return cp.votes;
+            } else if (cp.fromBlock < blockNumber) {
+                lower = center;
+            } else {
+                upper = center - 1;
+            }
+        }
+        return checkpoints[_pid][account][lower].votes;
+    }
+
+    function _writeCheckpoint(uint256 _pid, address delegatee, uint32 nCheckpoints, uint256 oldVotes, uint256 newVotes) internal {
+      uint32 blockNumber = safe32(block.number, "Comp::_writeCheckpoint: block number exceeds 32 bits");
+
+      if (nCheckpoints > 0 && checkpoints[_pid][delegatee][nCheckpoints - 1].fromBlock == blockNumber) {
+          checkpoints[_pid][delegatee][nCheckpoints - 1].votes = newVotes;
+      } else {
+          checkpoints[_pid][delegatee][nCheckpoints] = Checkpoint(blockNumber, newVotes);
+          numCheckpoints[_pid][delegatee] = nCheckpoints + 1;
+      }
+
+      emit DelegateVotesChanged(delegatee, oldVotes, newVotes);
+    }
+    
+    function safe32(uint n, string memory errorMessage) internal pure returns (uint32) {
+        require(n < 2**32, errorMessage);
+        return uint32(n);
     }
 }
