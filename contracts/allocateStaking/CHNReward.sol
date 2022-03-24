@@ -15,6 +15,7 @@ contract CHNReward is Ownable {
 
     event Claim(address indexed user, uint256 indexed pid, uint256 reward);
     event GrantDAO(address indexed user, uint256 amount);
+    event ChangeStaking(address indexed stake);
 
     IERC20 public rewardToken;
     CHNStakingInterface public staking;
@@ -25,6 +26,7 @@ contract CHNReward is Ownable {
 
     function changeStakingAdderss(address _staking) public onlyOwner {
         staking = CHNStakingInterface(_staking);
+        emit ChangeStaking(_staking);
     }
 
     function claimReward(uint256 pid) public {
