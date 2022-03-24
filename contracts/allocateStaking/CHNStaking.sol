@@ -77,7 +77,8 @@ contract CHNStaking is OwnableUpgradeable {
     ) public initializer {
         require(_rewardVault != address(0) && address(_rewardToken) != address(0), "Zero address validation");
         require(_startBlock < _bonusEndBlock, "Start block lower than bonus end block");
-        require(_rewardPerBlock < _rewardToken.totalSupply(), "Reward per block less than token total supply");
+        require(_rewardPerBlock < _rewardToken.totalSupply(), "Reward per block bigger than reward token total supply");
+        require(BONUS_MULTIPLIER < 100, "Bonus multipler bigger than 100x reward bonus");
         __Ownable_init();
         rewardToken = _rewardToken;
         rewardPerBlock = _rewardPerBlock;
@@ -281,6 +282,8 @@ contract CHNStaking is OwnableUpgradeable {
         user.pendingTokenReward = 0;
         pool.totalAmountStake = pool.totalAmountStake.sub(userAmount);
         pool.stakeToken.safeTransfer(address(msg.sender), userAmount);
+        // Remove delegates from staking user
+        _moveDelegates(_pid, msg.sender, userAmount, false);
         emit EmergencyWithdraw(msg.sender, _pid, userAmount);
     }
 
