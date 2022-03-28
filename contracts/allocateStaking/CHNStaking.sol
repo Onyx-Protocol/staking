@@ -122,7 +122,7 @@ contract CHNStaking is OwnableUpgradeable {
         emit Add(address(_stakeToken), _allocPoint);
     }
 
-    // Update the given pool's SUSHI allocation point. Can only be called by the Timelock and DAO.
+    // Update the given pool's XCN allocation point. Can only be called by the Timelock and DAO.
     // This function can be only called by Timelock and DAO with voting power
     function set(
         uint256 _pid,
@@ -134,6 +134,13 @@ contract CHNStaking is OwnableUpgradeable {
         );
         poolInfo[_pid].allocPoint = _allocPoint;
         emit Set(_pid, _allocPoint);
+    }
+
+    // Update reward per block by the Timelock and DAO
+    function setRewardPerblock(uint256 speed)
+        public
+        onlyOwner {
+            rewardPerBlock = speed;
     }
 
     // Return reward multiplier over the given _from to _to block.
