@@ -24,7 +24,7 @@ contract CHNReward is Ownable {
         rewardToken = _rewardToken;
     }
 
-    function changeStakingAdderss(address _staking) public onlyOwner {
+    function changeStakingAddress(address _staking) public onlyOwner {
         staking = CHNStakingInterface(_staking);
         emit ChangeStaking(_staking);
     }
