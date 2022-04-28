@@ -1,24 +1,8 @@
-const { default: BigNumber } = require('bignumber.js');
-const { assert } = require('chai');
 const { ethers, upgrades } = require('hardhat');
 const { utils } = ethers;
-const { TASK_ETHERSCAN_VERIFY } = require('hardhat-deploy');
+const { expect } = require("chai");
 
-const BN = web3.utils.BN;
-const {
-  etherUnsigned,
-  mineBlockNumber,
-  advanceBlockTo,
-  advanceBlock,
-  advanceIncreaseBlock
-} = require('./Ethereum');
-
-require('chai')
-  .use(require('chai-as-promised'))
-  .use(require('chai-bn')(BN))
-  .should();
-
-contract('Staking Contract', function () {
+describe('Staking Contract', function () {
   let alice;
   let bob;
   let carol;

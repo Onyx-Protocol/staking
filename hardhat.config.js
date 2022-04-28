@@ -1,15 +1,11 @@
 require("dotenv").config();
-
 require("hardhat-deploy");
 require("@nomiclabs/hardhat-waffle");
-require("@nomiclabs/hardhat-truffle5");
 require("@nomiclabs/hardhat-etherscan");
 require("@nomiclabs/hardhat-ethers");
 require('@openzeppelin/hardhat-upgrades');
-// require("@typechain/hardhat");
 require("./tasks/compileOne.js");
-// require("@setprotocol/index-coop-contracts");
-
+require("hardhat-gas-reporter");
 /**
  * @type import('hardhat/config').HardhatUserConfig
  */
@@ -19,6 +15,10 @@ module.exports = {
   },
   etherscan: {
     apiKey: process.env.ETHERSCAN_API_KEY,
+  },
+  gasReporter: {
+    enabled: true,
+    currency: "USD",
   },
   networks: {
     hardhat: {
