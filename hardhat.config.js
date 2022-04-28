@@ -6,6 +6,8 @@ require("@nomiclabs/hardhat-ethers");
 require('@openzeppelin/hardhat-upgrades');
 require("./tasks/compileOne.js");
 require("hardhat-gas-reporter");
+require("solidity-coverage");
+
 /**
  * @type import('hardhat/config').HardhatUserConfig
  */

@@ -7,5 +7,7 @@ artifacts
 .env
 yarn-error.log
 .openzeppelin
+coverage/
+coverage.json
 
 .idea/
