@@ -5,6 +5,7 @@ require("@nomiclabs/hardhat-waffle");
 require("@nomiclabs/hardhat-truffle5");
 require("@nomiclabs/hardhat-etherscan");
 require("@nomiclabs/hardhat-ethers");
+require('@openzeppelin/hardhat-upgrades');
 // require("@typechain/hardhat");
 require("./tasks/compileOne.js");
 // require("@setprotocol/index-coop-contracts");
