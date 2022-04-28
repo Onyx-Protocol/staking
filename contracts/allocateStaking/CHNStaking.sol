@@ -6,10 +6,13 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import "@openzeppelin/contracts-upgradeable/token/ERC20/utils/SafeERC20Upgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
 
-contract CHNStaking is OwnableUpgradeable {
+contract CHNStaking is Initializable, OwnableUpgradeable {
     using SafeMath for uint256;
-    using SafeERC20 for IERC20;
+    using SafeERC20Upgradeable for IERC20Upgradeable;
     // Info of each user.
     struct UserInfo {
         uint256 amount;
@@ -18,7 +21,7 @@ contract CHNStaking is OwnableUpgradeable {
     }
     // Info of each pool.
     struct PoolInfo {
-        IERC20 stakeToken;
+        IERC20Upgradeable stakeToken;
         uint256 allocPoint;
         uint256 lastRewardBlock;
         uint256 accCHNPerShare;
@@ -39,12 +42,12 @@ contract CHNStaking is OwnableUpgradeable {
     /// @notice An event thats emitted when a delegate account's vote balance changes
     event DelegateVotesChanged(address indexed delegate, uint previousBalance, uint newBalance);
     
-    IERC20 public rewardToken;
+    IERC20Upgradeable public rewardToken;
     uint256 public rewardPerBlock;
     PoolInfo[] public poolInfo;
     mapping(uint256 => mapping(address => UserInfo)) public userInfo;
     mapping(address => bool) public poolTokens;
-    uint256 public totalAllocPoint = 0;
+    uint256 public totalAllocPoint;
     uint256 public startBlock;
     uint256 public bonusEndBlock;
     uint256 public BONUS_MULTIPLIER;
@@ -68,7 +71,7 @@ contract CHNStaking is OwnableUpgradeable {
     }
 
     function initialize(
-        IERC20 _rewardToken,
+        IERC20Upgradeable _rewardToken,
         uint256 _rewardPerBlock,
         uint256 _startBlock,
         uint256 _bonusEndBlock,
@@ -102,7 +105,7 @@ contract CHNStaking is OwnableUpgradeable {
     // This function can be only called by Timelock and DAO with voting power
     function add(
         uint256 _allocPoint,
-        IERC20 _stakeToken
+        IERC20Upgradeable _stakeToken
     ) public onlyOwner {
         require(!poolTokens[address(_stakeToken)], "Stake token already exist");
         massUpdatePools();
