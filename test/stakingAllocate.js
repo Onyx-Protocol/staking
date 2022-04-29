@@ -18,18 +18,14 @@ describe('Staking Contract', function () {
     alice = signers[1];
     bob = signers[2];
     carol = signers[3];
-    this.FakeToken = await ethers.getContractFactory("FakeToken");
     this.ERC20Mock = await ethers.getContractFactory("ERC20Mock");
     this.RewardVault = await ethers.getContractFactory("CHNReward");
     this.Staking = await ethers.getContractFactory("CHNStaking");
     
   })
   beforeEach(async () => {
-    chn = await this.FakeToken.deploy(utils.parseEther("10000000000000000000000000"));
+    chn = await this.ERC20Mock.deploy("Chain", "CHN", utils.parseEther("10000000000000000000000000"));
     await chn.deployed();
-    await chn.transfer(alice.address, utils.parseEther("1000"));
-    await chn.transfer(bob.address, utils.parseEther("1000"))
-    await chn.transfer(carol.address, utils.parseEther("1000"))
 
     uni = await this.ERC20Mock.deploy("UNI", "UNI", utils.parseEther("10000000000000000000000000"));
     await uni.deployed();
@@ -46,6 +42,24 @@ describe('Staking Contract', function () {
     rewardVault.changeStakingAddress(staking.address);
     await chn.transfer(rewardVault.address, utils.parseEther("100000"));
   });
+  
+  context("RewardVault", () => {
+    beforeEach(async() => {
+
+    })
+
+    it("only owner should change staking address", async() => {
+      await expect(rewardVault.connect(alice).changeStakingAddress(bob.address)).to.be.reverted;
+      await rewardVault.changeStakingAddress(bob.address);
+      expect(await rewardVault.staking()).to.equal(bob.address);
+    })
+
+    it("only owner should grant dao", async() => {
+      await expect(rewardVault.connect(alice).grantDAO(bob.address, utils.parseEther("10"))).to.be.reverted;
+      await rewardVault.grantDAO(bob.address, utils.parseEther("10"));
+      expect(await chn.balanceOf(bob.address)).to.equal(utils.parseEther("10"));
+    })
+  })
 
   it('create pool', async() => {
     await expect(staking.connect(alice).add(100, uni.address)).to.be.revertedWith("Ownable: caller is not the owner")
@@ -69,7 +83,7 @@ describe('Staking Contract', function () {
     await staking.connect(alice).withdraw(0, utils.parseEther("100"));
     expect(await uni.balanceOf(alice.address)).to.equal(utils.parseEther("1000"))
     await rewardVault.connect(alice).claimReward(0);
-    expect(await chn.balanceOf(alice.address)).to.equal(utils.parseEther("13000"));
+    expect(await chn.balanceOf(alice.address)).to.equal(utils.parseEther("12000"));
   })
 });
 

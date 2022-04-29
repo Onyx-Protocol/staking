@@ -26,21 +26,34 @@ module.exports = {
     hardhat: {
       allowUnlimitedContractSize: true,
     },
+    ropsten: {
+      url: `https://ropsten.infura.io/v3/${process.env.INFURA_PROJECT_ID}`,
+
+      accounts: [`0x${process.env.PRIVATE_KEY}`]
+    },
+    kovan: {
+      url: `https://kovan.infura.io/v3/${process.env.INFURA_PROJECT_ID}`,
+      accounts: [`0x${process.env.PRIVATE_KEY}`]
+    },
     rinkeby: {
-      url: process.env.RPC_URL,
-      accounts: [process.env.ACC_PRIVATE_KEY],
+      url: `https://rinkeby.infura.io/v3/${process.env.INFURA_PROJECT_ID}`,
+      accounts: [`0x${process.env.PRIVATE_KEY}`]
+    },
+    mainnet: {
+      url: `https://mainnet.infura.io/v3/${process.env.INFURA_PROJECT_ID}`,
+      accounts: [`0x${process.env.PRIVATE_KEY}`]
     },
     bsclocal: {
       url: "http://127.0.0.1:8885",
-      accounts: [process.env.ACC_PRIVATE_KEY],
+      accounts: [`0x${process.env.PRIVATE_KEY}`],
     },
     bsctestnet: {
-      url: "https://data-seed-prebsc-2-s3.binance.org:8545/",
-      accounts: [process.env.ACC_PRIVATE_KEY],
+      url: `https://bsc.getblock.io/testnet/?api_key=/${process.env.GETBLOCK_API_KEY}`,
+      accounts: [`0x${process.env.PRIVATE_KEY}`],
     },
-    bscmainnet: {
-      url: process.env.RPC_URL,
-      accounts: [process.env.ACC_PRIVATE_KEY],
+    bsc: {
+      url: `https://bsc.getblock.io/mainnet/?api_key=/${process.env.GETBLOCK_API_KEY}`,
+      accounts: [`0x${process.env.PRIVATE_KEY}`],
       chainId: 56
     },
   },
