@@ -4,12 +4,13 @@ pragma solidity ^0.8.3;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import "@openzeppelin/contracts-upgradeable/token/ERC20/utils/SafeERC20Upgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
 
-contract CHNStaking is OwnableUpgradeable {
-    using SafeMath for uint256;
-    using SafeERC20 for IERC20;
+contract CHNStaking is Initializable, OwnableUpgradeable {
+    using SafeERC20Upgradeable for IERC20Upgradeable;
     // Info of each user.
     struct UserInfo {
         uint256 amount;
@@ -18,7 +19,7 @@ contract CHNStaking is OwnableUpgradeable {
     }
     // Info of each pool.
     struct PoolInfo {
-        IERC20 stakeToken;
+        IERC20Upgradeable stakeToken;
         uint256 allocPoint;
         uint256 lastRewardBlock;
         uint256 accCHNPerShare;
@@ -39,12 +40,12 @@ contract CHNStaking is OwnableUpgradeable {
     /// @notice An event thats emitted when a delegate account's vote balance changes
     event DelegateVotesChanged(address indexed delegate, uint previousBalance, uint newBalance);
     
-    IERC20 public rewardToken;
+    IERC20Upgradeable public rewardToken;
     uint256 public rewardPerBlock;
     PoolInfo[] public poolInfo;
     mapping(uint256 => mapping(address => UserInfo)) public userInfo;
     mapping(address => bool) public poolTokens;
-    uint256 public totalAllocPoint = 0;
+    uint256 public totalAllocPoint;
     uint256 public startBlock;
     uint256 public bonusEndBlock;
     uint256 public BONUS_MULTIPLIER;
@@ -68,7 +69,7 @@ contract CHNStaking is OwnableUpgradeable {
     }
 
     function initialize(
-        IERC20 _rewardToken,
+        IERC20Upgradeable _rewardToken,
         uint256 _rewardPerBlock,
         uint256 _startBlock,
         uint256 _bonusEndBlock,
@@ -102,13 +103,13 @@ contract CHNStaking is OwnableUpgradeable {
     // This function can be only called by Timelock and DAO with voting power
     function add(
         uint256 _allocPoint,
-        IERC20 _stakeToken
+        IERC20Upgradeable _stakeToken
     ) public onlyOwner {
         require(!poolTokens[address(_stakeToken)], "Stake token already exist");
         massUpdatePools();
         uint256 lastRewardBlock =
             block.number > startBlock ? block.number : startBlock;
-        totalAllocPoint = totalAllocPoint.add(_allocPoint);
+        totalAllocPoint = totalAllocPoint + _allocPoint;
         poolTokens[address(_stakeToken)] = true;
         poolInfo.push(
             PoolInfo({
@@ -129,9 +130,7 @@ contract CHNStaking is OwnableUpgradeable {
         uint256 _allocPoint
     ) public onlyOwner validatePoolByPid(_pid) {
         massUpdatePools();
-        totalAllocPoint = totalAllocPoint.sub(poolInfo[_pid].allocPoint).add(
-            _allocPoint
-        );
+        totalAllocPoint = totalAllocPoint - poolInfo[_pid].allocPoint + _allocPoint;
         poolInfo[_pid].allocPoint = _allocPoint;
         emit Set(_pid, _allocPoint);
     }
@@ -151,14 +150,12 @@ contract CHNStaking is OwnableUpgradeable {
     {
         require(_from >= startBlock, "from block number bigger than start block");
         if (_to <= bonusEndBlock) {
-            return _to.sub(_from).mul(BONUS_MULTIPLIER);
+            return (_to - _from) * BONUS_MULTIPLIER;
         } else if (_from >= bonusEndBlock) {
-            return _to.sub(_from);
+            return _to - _from;
         } else {
             return
-                bonusEndBlock.sub(_from).mul(BONUS_MULTIPLIER).add(
-                    _to.sub(bonusEndBlock)
-                );
+                (bonusEndBlock - _from) * BONUS_MULTIPLIER + _to - bonusEndBlock;
         }
     }
 
@@ -176,14 +173,10 @@ contract CHNStaking is OwnableUpgradeable {
             uint256 multiplier =
                 getMultiplier(pool.lastRewardBlock, block.number);
             uint256 reward =
-                multiplier.mul(rewardPerBlock).mul(pool.allocPoint).div(
-                    totalAllocPoint
-                );
-            accCHNPerShare = accCHNPerShare.add(
-                reward.mul(1e12).div(supply)
-            );
+                multiplier * rewardPerBlock * pool.allocPoint / totalAllocPoint;
+            accCHNPerShare = accCHNPerShare + reward * 1e12 / supply;
         }
-        return user.amount.mul(accCHNPerShare).div(1e12).add(user.pendingTokenReward).sub(user.rewardDebt);
+        return user.amount * accCHNPerShare / 1e12 + user.pendingTokenReward - user.rewardDebt;
     }
 
     // Update reward vairables for all pools. Be careful of gas spending!
@@ -207,12 +200,8 @@ contract CHNStaking is OwnableUpgradeable {
         }
         uint256 multiplier = getMultiplier(pool.lastRewardBlock, block.number);
         uint256 reward =
-            multiplier.mul(rewardPerBlock).mul(pool.allocPoint).div(
-                totalAllocPoint
-            );
-        pool.accCHNPerShare = pool.accCHNPerShare.add(
-            reward.mul(1e12).div(supply)
-        );
+            multiplier * rewardPerBlock * pool.allocPoint / totalAllocPoint;
+        pool.accCHNPerShare = pool.accCHNPerShare + reward * 1e12 / supply;
         pool.lastRewardBlock = block.number;
     }
 
@@ -222,10 +211,10 @@ contract CHNStaking is OwnableUpgradeable {
                 uint32 dstRepNum = numCheckpoints[_pid][dstRep];
                 uint256 dstRepOld = dstRepNum > 0 ? checkpoints[_pid][dstRep][dstRepNum - 1].votes : 0;
                 if (stake) {
-                    uint256 dstRepNew = dstRepOld.add(amount);
+                    uint256 dstRepNew = dstRepOld + amount;
                     _writeCheckpoint(_pid, dstRep, dstRepNum, dstRepOld, dstRepNew);
                 } else {
-                    uint256 dstRepNew = dstRepOld.sub(amount);
+                    uint256 dstRepNew = dstRepOld - amount;
                     _writeCheckpoint(_pid, dstRep, dstRepNum, dstRepOld, dstRepNew);
                 }
             }
@@ -239,19 +228,17 @@ contract CHNStaking is OwnableUpgradeable {
         updatePool(_pid);
         if (user.amount > 0) {
             uint256 pending =
-                user.amount.mul(pool.accCHNPerShare).div(1e12).sub(
-                    user.rewardDebt
-                );
-            user.pendingTokenReward = user.pendingTokenReward.add(pending);
+                user.amount * pool.accCHNPerShare / 1e12 - user.rewardDebt;
+            user.pendingTokenReward += pending;
         }
-        pool.totalAmountStake = pool.totalAmountStake.add(_amount);
+        pool.totalAmountStake += _amount;
         pool.stakeToken.safeTransferFrom(
             address(msg.sender),
             address(this),
             _amount
         );
-        user.amount = user.amount.add(_amount);
-        user.rewardDebt = user.amount.mul(pool.accCHNPerShare).div(1e12);
+        user.amount += _amount;
+        user.rewardDebt = user.amount * pool.accCHNPerShare / 1e12;
 
         _moveDelegates(_pid, msg.sender, _amount, true);
         emit Stake(msg.sender, _pid, _amount);
@@ -262,16 +249,11 @@ contract CHNStaking is OwnableUpgradeable {
         UserInfo storage user = userInfo[_pid][msg.sender];
         require(user.amount >= _amount, "withdraw: not good");
         updatePool(_pid);
-        uint256 pending =
-            user.amount.mul(pool.accCHNPerShare).div(1e12).sub(
-                user.rewardDebt
-            );
-        // pending = pending.add(user.pendingTokenReward);
-        // pool.stakeToken.safeTransfer(address(msg.sender), pending);
+        uint256 pending = user.amount * pool.accCHNPerShare / 1e12 - user.rewardDebt;
         user.pendingTokenReward = user.pendingTokenReward + pending;
-        user.amount = user.amount.sub(_amount);
-        pool.totalAmountStake = pool.totalAmountStake.sub(_amount);
-        user.rewardDebt = user.amount.mul(pool.accCHNPerShare).div(1e12);
+        user.amount -= _amount;
+        pool.totalAmountStake -= _amount;
+        user.rewardDebt = user.amount * pool.accCHNPerShare / 1e12;
         pool.stakeToken.safeTransfer(address(msg.sender), _amount);
 
         // Remove delegates from staking user
@@ -287,7 +269,7 @@ contract CHNStaking is OwnableUpgradeable {
         user.amount = 0;
         user.rewardDebt = 0;
         user.pendingTokenReward = 0;
-        pool.totalAmountStake = pool.totalAmountStake.sub(userAmount);
+        pool.totalAmountStake -= userAmount;
         pool.stakeToken.safeTransfer(address(msg.sender), userAmount);
         // Remove delegates from staking user
         _moveDelegates(_pid, msg.sender, userAmount, false);
@@ -299,13 +281,10 @@ contract CHNStaking is OwnableUpgradeable {
         PoolInfo storage pool = poolInfo[pid];
         UserInfo storage user = userInfo[pid][userAddress];
         updatePool(pid);
-        uint256 pending =
-            user.amount.mul(pool.accCHNPerShare).div(1e12).sub(
-                user.rewardDebt
-            );
+        uint256 pending = user.amount * pool.accCHNPerShare / 1e12 - user.rewardDebt;
         pending = pending + user.pendingTokenReward;
         user.pendingTokenReward = 0;
-        user.rewardDebt = user.amount.mul(pool.accCHNPerShare).div(1e12);
+        user.rewardDebt = user.amount * pool.accCHNPerShare / 1e12;
         emit ClaimRewardFromVault(userAddress, pid);
         return pending;
     }
